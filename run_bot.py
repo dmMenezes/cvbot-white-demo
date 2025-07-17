@@ -22,7 +22,11 @@ KEY = os.getenv("KEY")
 # print(type(HOST), type(PORT), type(KEY))
 
 # Load the model once globally
-model = YOLO('best.pt')
+try:
+    model = YOLO('best.pt')
+except Exception as e:
+    print(f"Error loading model: {e}")
+    exit()
 
 cap = cv2.VideoCapture(0)
 if not cap.isOpened():
@@ -54,11 +58,16 @@ def detect_ball_center(frame):
 
 async def connect():
     # The following classes are needed to init the drive controller
-    api_client = TxtApiClient(HOST, PORT, KEY)
-    controller = EasyDriveController(api_client, DriveRobotConfiguration())
-    await api_client.initialize()
+    try:
+        api_client = TxtApiClient(HOST, PORT, KEY)
+        controller = EasyDriveController(api_client, DriveRobotConfiguration())
+        await api_client.initialize()
     
-    await controller.stop()
+        await controller.stop()
+    
+    except Exception as e:
+        print(f"Error initializing API client or controller: {e}")
+        exit()
 
     while True:
         print("true")
@@ -137,22 +146,9 @@ async def connect():
     cap.release()
     cv2.destroyAllWindows()
 
-
-    # while (angle > 5 ):
-    #     await controller.drive(speeds=np.array([0.0, 100.0, 0.0]))
-    #     angle = angle - 1
-    #     await asyncio.sleep(1.0)
-    # await controller.stop()
-
-    # while (distance > 5 ):
-    #     await controller.drive(speeds=np.array([0.0, 0.0, -100.0]))
-    # await controller.stop()
-
     # first param turns front and rear in reverse
     # second param rotate positive -> left
     # third param forward (negative)
     # await asyncio.sleep(1.0)
 
 asyncio.run(connect())
-
-
