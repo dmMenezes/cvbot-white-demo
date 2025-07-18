@@ -67,6 +67,17 @@ async def connect():
     detected_dir = pathlib.Path("detected")
     detected_dir.mkdir(exist_ok=True)
 
+    # Grab a sample frame to get dimensions for video writer
+    ret, sample_frame = cap.read()
+    if not ret:
+        print("Failed to grab sample frame for video writer")
+        exit()
+    frame_height, frame_width = sample_frame.shape[:2]
+
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    video_path = detected_dir / "output.avi"
+    out = cv2.VideoWriter(str(video_path), fourcc, 20.0, (frame_width, frame_height))
+
     stop_event = asyncio.Event()
     quit_task = asyncio.create_task(listen_for_quit(stop_event))
 
@@ -88,6 +99,9 @@ async def connect():
     last_error = 0.0
     dt = 0.1  # approx loop interval in seconds
 
+    forward_speed = -100.0  # fixed forward speed (negative for forward)
+    backward_speed = 100.0  # fixed backward speed (positive for backward)
+
     forward_motion = False
     backward_motion = False
 
@@ -102,76 +116,58 @@ async def connect():
         if detected:
             x1, y1, x2, y2 = box
             center_x = (x1 + x2) / 2
-            frame_height, frame_width = frame.shape[:2]
             bbox_height = y2 - y1
 
             error = (center_x / frame_width) - 0.5  # error from center line (-0.5 to 0.5)
 
-            # Draw bbox and center for display
+            # Annotate frame
             annotated_frame = frame.copy()
             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.circle(annotated_frame, (int(center_x), int((y1 + y2) / 2)), 5, (0, 0, 255), -1)
-            text = f"Error: {error:.3f}, BBox height: {bbox_height}, Forward: {forward_motion}, Backward: {backward_motion}"
-            cv2.putText(annotated_frame, text, (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-            # Save annotated frame
-            filename = detected_dir / f"detected_{int(time.time() * 1000)}.jpg"
-            cv2.imwrite(str(filename), annotated_frame)
+            text = f"Error: {error:.3f}, BBox H: {bbox_height}, Fwd:{forward_motion}, Bwd:{backward_motion}"
+            cv2.putText(annotated_frame, text, (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+
+            # Write annotated frame to video
+            out.write(annotated_frame)
+
+            # Forward/backward motion logic
+
+            # Check horizontal centering ranges
+            centered_threshold = 0.05     # ±5% error range for forward motion
+            outer_threshold = 0.07        # ±7% error range to stop forward/backward
 
             if forward_motion or backward_motion:
-                # If moving forward/backward, check if centroid drifts beyond ±7%
-                if abs(error) > 0.07:
-                    # Stop forward/backward motion and switch to centering
+                # If centroid moves outside ±7%, stop forward/backward and go back to PID centering
+                if abs(error) > outer_threshold:
                     forward_motion = False
                     backward_motion = False
                     await controller.stop()
-                    print("Centroid drifted out of range, stopping forward/backward motion.")
+                    # Reset PID integral and derivative to avoid spikes
+                    integral = 0.0
+                    last_error = error
+                    print("Centroid out of range during forward/backward motion, switching to PID centering")
                 else:
-                    # Continue forward or backward motion based on bbox height
-                    if forward_motion and bbox_height >= 0.9 * frame_height:
-                        # Too close, start moving backward
+                    # Continue forward/backward motion based on bbox height
+                    if bbox_height < 0.8 * frame_height:
+                        # Move forward
+                        await controller.drive(speeds=np.array([0.0, 0.0, forward_speed]))
+                        print(f"Moving forward: bbox_height={bbox_height}")
+                    elif bbox_height > 0.9 * frame_height:
+                        # Move backward
+                        await controller.drive(speeds=np.array([0.0, 0.0, backward_speed]))
+                        print(f"Moving backward: bbox_height={bbox_height}")
+                    else:
+                        # Stop motion if bbox height in acceptable range
                         forward_motion = False
-                        backward_motion = True
-                        print("Too close, switching to backward motion.")
-                    elif backward_motion and bbox_height <= 0.8 * frame_height:
-                        # Far enough, stop backward motion
                         backward_motion = False
                         await controller.stop()
-                        print("Back to acceptable distance, stopping backward motion.")
-
-                    try:
-                        if forward_motion:
-                            # Move forward
-                            await controller.drive(speeds=np.array([0.0, 0.0, -100.0]))
-                            print("Moving forward.")
-                        elif backward_motion:
-                            # Move backward
-                            await controller.drive(speeds=np.array([0.0, 0.0, 100.0]))
-                            print("Moving backward.")
-                        else:
-                            # Stop motion
-                            await controller.stop()
-                    except Exception as e:
-                        print(f"Error during forward/backward drive: {e}")
-                        await controller.stop()
+                        print("Stopped forward/backward motion: bbox height acceptable")
             else:
-                # Not moving forward/backward, do PID centering until within ±5%
-                if abs(error) <= 0.05:
-                    # Within acceptable range, start forward motion if bbox height < 80%
-                    if bbox_height < 0.8 * frame_height:
-                        forward_motion = True
-                        print("Starting forward motion.")
-                        try:
-                            await controller.drive(speeds=np.array([0.0, 0.0, -100.0]))
-                        except Exception as e:
-                            print(f"Error starting forward drive: {e}")
-                            await controller.stop()
-                    else:
-                        # Close enough, no forward motion needed
-                        await controller.stop()
-                else:
-                    # PID left/right centering
+                # Use PID to center horizontally if not in forward/backward motion
+                if abs(error) > centered_threshold:
+                    # PID calculations
                     integral += error * dt
                     derivative = (error - last_error) / dt
                     output = Kp * error + Ki * integral + Kd * derivative
@@ -183,17 +179,26 @@ async def connect():
 
                     try:
                         await controller.drive(speeds=np.array([0.0, output, 0.0]))
-                        print(f"Centering with PID output: {output:.1f}")
+                        print(f"PID centering: error={error:.3f}, output={output:.1f}")
                     except Exception as e:
-                        print(f"Error during PID centering drive: {e}")
+                        print(f"Error during drive control: {e}")
                         await controller.stop()
-
-            # Show live video
-            cv2.imshow('Detection', annotated_frame)
+                        continue
+                else:
+                    # Centroid within ±5%, start forward motion if bbox height < 80%
+                    if bbox_height < 0.8 * frame_height:
+                        forward_motion = True
+                        backward_motion = False
+                        await controller.drive(speeds=np.array([0.0, 0.0, forward_speed]))
+                        print("Starting forward motion")
+                    else:
+                        await controller.stop()
+                        print("Centered and close enough, stopped")
 
         else:
-            # No detection: show frame and search by slowly moving left
-            cv2.imshow('Detection', frame)
+            # No detection: write raw frame and search by slowly moving left
+            out.write(frame)
+
             try:
                 await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
                 await asyncio.sleep(0.5)
@@ -203,17 +208,13 @@ async def connect():
                 print(f"Error during search drive: {e}")
                 continue
 
-        # Allow quit on window keypress 'q'
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            stop_event.set()
-            break
-
         await asyncio.sleep(dt)
 
     stop_event.set()
     quit_task.cancel()
     await controller.stop()
     cap.release()
+    out.release()
     cv2.destroyAllWindows()
 
 asyncio.run(connect())
