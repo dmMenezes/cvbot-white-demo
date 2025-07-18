@@ -118,28 +118,36 @@ async def connect():
                 await controller.stop()  # Ensure stopped before moving
                 await asyncio.sleep(1)
 
-                diff = abs(norm_x)
-                # Clamp diff between 0.2 and 0.45
-                diff = max(0.2, min(diff, 0.45))
-                # Linear scaling: diff=0.2 -> sleep=0.1, diff=0.45 -> sleep=0.5
-                sleep_time = 0.1 + ((diff - 0.2) / (0.45 - 0.2)) * (0.5 - 0.1)
+                center_threshold = 0.1
 
-                if norm_x < -0.2:
-                    # Move left scaled by sleep_time
+                if norm_x < -center_threshold:
+                    # Distance from deadzone edge on left side
+                    diff = abs(norm_x + center_threshold)
+                    # Clamp diff between 0.0 and 0.35 (because max diff = 0.45 - 0.1)
+                    diff = max(0.0, min(diff, 0.35))
+                    # Scale sleep time from 0.1 (min) to 0.5 (max)
+                    sleep_time = 0.05 + (diff / 0.35) * (0.5 - 0.1)
+
                     await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
                     await asyncio.sleep(sleep_time)
                     await controller.stop()
                     await asyncio.sleep(0.5)
                     print(f"Moved left for {sleep_time:.2f}s")
-                elif norm_x > 0.2:
-                    # Move right scaled by sleep_time
+
+                elif norm_x > center_threshold:
+                    # Distance from deadzone edge on right side
+                    diff = abs(norm_x - center_threshold)
+                    diff = max(0.0, min(diff, 0.35))
+                    sleep_time = 0.05 + (diff / 0.35) * (0.5 - 0.1)
+
                     await controller.drive(speeds=np.array([0.0, -50.0, 0.0]))
                     await asyncio.sleep(sleep_time)
                     await controller.stop()
                     await asyncio.sleep(0.5)
                     print(f"Moved right for {sleep_time:.2f}s")
+
                 else:
-                    # No movement if within -0.2 to 0.2 range
+                    # Inside deadzone, no movement
                     await controller.stop()
                     await asyncio.sleep(0.5)
 
