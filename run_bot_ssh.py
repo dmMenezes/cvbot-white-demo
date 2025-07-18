@@ -87,6 +87,8 @@ async def connect():
         exit()
 
     while not stop_event.is_set():
+        await controller.stop()  # Prevent busy-waiting
+        await asyncio.sleep(0.5)  # Prevent busy-waiting
         ret, frame = cap.read()
         if not ret:
             print("Failed to grab the frame")
@@ -133,16 +135,16 @@ async def connect():
                 await controller.stop()  # Ensure stopped before moving
                 await asyncio.sleep(0.2)
 
-                if center_x < LR_center - 50:  # Move left
-                    print(f"center_x - LR_center + 50: {center_x - LR_center + 50} move left for {(center_x - LR_center + 50)*(-1)/1000} seconds")
+                if center_x < LR_center - 150:  # Move left
+                    print(f"center_x - LR_center + 150: {center_x - LR_center + 150} move left for {(center_x - LR_center + 150)*(-1)/1000} seconds")
                     await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
-                    await asyncio.sleep((center_x - LR_center + 50)*(-1)/1000)  # Adjust sleep based on distance
+                    await asyncio.sleep((center_x - LR_center + 150)*(-1)/1000)  # Adjust sleep based on distance
                     await controller.stop()
 
-                elif center_x > LR_center + 50:  # Move right
-                    print(f"center_x - LR_center - 50: {center_x - LR_center - 50} move right for {(center_x - LR_center - 50)/1000} seconds")
+                elif center_x > LR_center + 150:  # Move right
+                    print(f"center_x - LR_center - 150: {center_x - LR_center - 150} move right for {(center_x - LR_center - 150)/1000} seconds")
                     await controller.drive(speeds=np.array([0.0, -50.0, 0.0]))
-                    await asyncio.sleep((center_x - LR_center - 50)/1000)  # Adjust sleep based on distance
+                    await asyncio.sleep((center_x - LR_center - 150)/1000)  # Adjust sleep based on distance
                     await controller.stop()
 
                 else:
