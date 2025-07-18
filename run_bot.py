@@ -13,6 +13,17 @@ import os
 import cv2
 from ultralytics import YOLO
 
+import warnings
+
+# Suppress specific Pydantic warning
+warnings.filterwarnings(
+    "ignore",
+    message="Pydantic serializer warnings:",
+    category=UserWarning,
+    module="pydantic.main"
+)
+
+
 load_dotenv()  # loads .env from current dir
 
 HOST = os.getenv("HOST")
@@ -23,15 +34,20 @@ KEY = os.getenv("KEY")
 
 # Load the model once globally
 try:
+    print("loading model")
     model = YOLO('best.pt')
 except Exception as e:
     print(f"Error loading model: {e}")
     exit()
 
+print("connecting to camera")
 cap = cv2.VideoCapture(0)
 if not cap.isOpened():
     print("Could not open camera!")
     exit()
+else:
+    print("Camera opened successfully")
+
 
 def detect_ball_center(frame):
     """
@@ -42,7 +58,7 @@ def detect_ball_center(frame):
             - True and (x1, y1, x2, y2) if ball detected
             - False and (0, 0, 0, 0) if no detection
     """
-    results = model(frame)
+    results = model(frame, verbose=False)
     boxes = results[0].boxes
 
     if boxes is not None and len(boxes) > 0:
@@ -59,6 +75,8 @@ def detect_ball_center(frame):
 async def connect():
     # The following classes are needed to init the drive controller
     try:
+        print("Initializing API client and controller")
+         # Initialize the API client and controller
         api_client = TxtApiClient(HOST, PORT, KEY)
         controller = EasyDriveController(api_client, DriveRobotConfiguration())
         await api_client.initialize()
@@ -70,7 +88,12 @@ async def connect():
         exit()
 
     while True:
-        print("true")
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            await controller.stop()
+            # await api_client.close()
+            break
+
+        # print("true")
         ret, frame = cap.read()
         if not ret:
             print("Failed to grab the frame")
@@ -119,7 +142,7 @@ async def connect():
                 cv2.putText(annotated_frame, text, (center_x + 10, center_y - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-                print(f"Ball detected at normalized coords: X={norm_x:.3f}, Y={norm_y:.3f}")
+                # print(f"Ball detected at normalized coords: X={norm_x:.3f}, Y={norm_y:.3f}")
             
             except Exception as e:
                 print(f"Error during drive control: {e}")
@@ -128,7 +151,7 @@ async def connect():
         
         if not detected:
             try:
-                print("No ball detected, trying to find...")
+                # print("No ball detected, trying to find...")
                 # await api_client.initialize()
                 await controller.drive(speeds=np.array([0.0, 100.0, 0.0]))
             except Exception as e:
@@ -136,13 +159,17 @@ async def connect():
                 continue
 
 
-        cv2.imshow("YOLOv8 Football Detection", annotated_frame)
+        headless = not os.environ.get("DISPLAY")
+
+        # Later in code, only show frame if GUI is available
+        if not headless:
+            cv2.imshow("Football Detection", annotated_frame)
+
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
     
     await controller.stop()
-    await api_client.close()
     cap.release()
     cv2.destroyAllWindows()
 

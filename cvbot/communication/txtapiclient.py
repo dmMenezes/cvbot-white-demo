@@ -252,3 +252,9 @@ class TxtApiClient(Controller):
                 motor.recorded_at = time.time()
                 ret.append(motor)
         return ret
+
+    async def close(self):
+        """Clean up the internal aiohttp session if we created it."""
+        session = self.api._client.session  # access the actual aiohttp.ClientSession
+        if isinstance(session, ClientSession) and not session.closed:
+            await session.close()
