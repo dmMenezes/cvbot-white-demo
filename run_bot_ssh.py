@@ -137,8 +137,14 @@ async def connect():
             try:
                 await controller.stop()  # Ensure stopped before moving
                 await asyncio.sleep(0.2)
-                                    
-                if LR_center - 100 < center_x < LR_center + 100:
+
+                if y2 - y1 > 0.9 * frame_height:
+                    print("Ball is too close, stopping")
+                    await controller.stop()
+                    await asyncio.sleep(0.2)
+                    continue
+
+                elif LR_center - 100 < center_x < LR_center + 100:
                     print("Ball is centered, move ahead")
                     await controller.drive(speeds=np.array([0.0, 0.0, -50.0]))  # Stop if within deadzone
                     await asyncio.sleep(0.2)
