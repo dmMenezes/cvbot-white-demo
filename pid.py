@@ -181,8 +181,11 @@ async def connect():
             cv2.imwrite(str(filename), annotated_frame)
 
             try:
-                # Command robot: speeds = [forward/backward, left/right, rotation]
-                await controller.drive(speeds=np.array([forward, output, 0.0]))
+                if forward_speed == 0.0:
+                    # Command robot: speeds = [forward/backward, left/right, rotation]
+                    await controller.drive(speeds=np.array([forward, output, 0.0]))
+                else:
+                    await controller.drive(speeds=np.array([0.0, 0.0, -100.0]))
             except Exception as e:
                 print(f"Error during drive control: {e}")
                 await controller.stop()
