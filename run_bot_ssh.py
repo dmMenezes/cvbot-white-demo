@@ -46,7 +46,7 @@ if not cap.isOpened():
 else:
     print("Camera opened successfully")
 
-def detect_ball_center(frame):
+def detect_ball_center(frame, verbose=False):
     results = model(frame)
     boxes = results[0].boxes
 
@@ -121,18 +121,21 @@ async def connect():
                 if norm_x < -0.2:
                     # Move left for 1 second
                     await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(0.1)
                     await controller.stop()
                     await asyncio.sleep(0.5)
+                    print("STOOOOOOOP")
                 elif norm_x > 0.2:
                     # Move right for 1 second
                     await controller.drive(speeds=np.array([0.0, -50.0, 0.0]))
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(0.1)
                     await controller.stop()
                     await asyncio.sleep(0.5)
+                    print("HAAAAAAAAAAALt")
                 else:
                     # No movement if within -0.2 to 0.2 range
                     await controller.stop()
+                    await asyncio.sleep(0.5)
 
             except Exception as e:
                 print(f"Error during drive control: {e}")
