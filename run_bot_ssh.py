@@ -95,77 +95,84 @@ async def connect():
         detected, box = detect_ball_center(frame)
 
         if detected:
-            x1, y1, x2, y2 = map(int, box)
+            x1, y1, x2, y2 = box
             center_x = int((x1 + x2) / 2)
             center_y = int((y1 + y2) / 2)
+
             frame_height, frame_width = frame.shape[:2]
-            norm_x = (center_x / frame_width) - 0.5  # normalized x centered at 0
-            print(f"Normalized X: {norm_x:.3f}")
+            LR_center = frame_width / 2
+            print(f"Center X: {center_x}, LR_center: {LR_center}")
+            # x1, y1, x2, y2 = map(int, box)
+            # center_x = int((x1 + x2) / 2)
+            # center_y = int((y1 + y2) / 2)
+            # frame_height, frame_width = frame.shape[:2]
+            # norm_x = (center_x / frame_width) - 0.5  # normalized x centered at 0
+            # print(f"Normalized X: {norm_x:.3f}")
 
             # Draw bounding box and center on copy of frame
-            annotated_frame = frame.copy()
-            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.circle(annotated_frame, (center_x, center_y), 5, (0, 0, 255), -1)
-            text = f"Center X: {norm_x:.3f}"
-            cv2.putText(annotated_frame, text, (x1, y1 - 10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+            # annotated_frame = frame.copy()
+            # cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            # cv2.circle(annotated_frame, (center_x, center_y), 5, (0, 0, 255), -1)
+            # text = f"Center X: {norm_x:.3f}"
+            # cv2.putText(annotated_frame, text, (x1, y1 - 10),
+            #             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
             # Save annotated frame with timestamp
-            filename = detected_dir / f"detected_{int(time.time() * 1000)}.jpg"
-            cv2.imwrite(str(filename), annotated_frame)
+            # filename = detected_dir / f"detected_{int(time.time() * 1000)}.jpg"
+            # cv2.imwrite(str(filename), annotated_frame)
 
-            try:
-                await controller.stop()  # Ensure stopped before moving
-                await asyncio.sleep(1)
+        #     try:
+        #         await controller.stop()  # Ensure stopped before moving
+        #         await asyncio.sleep(1)
 
-                center_threshold = 0.1
+        #         center_threshold = 0.1
 
-                if norm_x < -center_threshold:
-                    # Distance from deadzone edge on left side
-                    diff = abs(norm_x + center_threshold)
-                    # Clamp diff between 0.0 and 0.35 (because max diff = 0.45 - 0.1)
-                    diff = max(0.0, min(diff, 0.35))
-                    # Scale sleep time from 0.1 (min) to 0.5 (max)
-                    sleep_time = 0.05 + (diff / 0.35) * (0.5 - 0.1)
+        #         if norm_x < -center_threshold:
+        #             # Distance from deadzone edge on left side
+        #             diff = abs(norm_x + center_threshold)
+        #             # Clamp diff between 0.0 and 0.35 (because max diff = 0.45 - 0.1)
+        #             diff = max(0.0, min(diff, 0.35))
+        #             # Scale sleep time from 0.1 (min) to 0.5 (max)
+        #             sleep_time = 0.05 + (diff / 0.35) * (0.5 - 0.1)
 
-                    await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
-                    await asyncio.sleep(sleep_time)
-                    await controller.stop()
-                    await asyncio.sleep(0.5)
-                    print(f"Moved left for {sleep_time:.2f}s")
+        #             await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
+        #             await asyncio.sleep(sleep_time)
+        #             await controller.stop()
+        #             await asyncio.sleep(0.5)
+        #             print(f"Moved left for {sleep_time:.2f}s")
 
-                elif norm_x > center_threshold:
-                    # Distance from deadzone edge on right side
-                    diff = abs(norm_x - center_threshold)
-                    diff = max(0.0, min(diff, 0.35))
-                    sleep_time = 0.05 + (diff / 0.35) * (0.5 - 0.1)
+        #         elif norm_x > center_threshold:
+        #             # Distance from deadzone edge on right side
+        #             diff = abs(norm_x - center_threshold)
+        #             diff = max(0.0, min(diff, 0.35))
+        #             sleep_time = 0.05 + (diff / 0.35) * (0.5 - 0.1)
 
-                    await controller.drive(speeds=np.array([0.0, -50.0, 0.0]))
-                    await asyncio.sleep(sleep_time)
-                    await controller.stop()
-                    await asyncio.sleep(0.5)
-                    print(f"Moved right for {sleep_time:.2f}s")
+        #             await controller.drive(speeds=np.array([0.0, -50.0, 0.0]))
+        #             await asyncio.sleep(sleep_time)
+        #             await controller.stop()
+        #             await asyncio.sleep(0.5)
+        #             print(f"Moved right for {sleep_time:.2f}s")
 
-                else:
-                    # Inside deadzone, no movement
-                    await controller.stop()
-                    await asyncio.sleep(0.5)
+        #         else:
+        #             # Inside deadzone, no movement
+        #             await controller.stop()
+        #             await asyncio.sleep(0.5)
 
-            except Exception as e:
-                print(f"Error during drive control: {e}")
-                await controller.stop()
-                continue
+        #     except Exception as e:
+        #         print(f"Error during drive control: {e}")
+        #         await controller.stop()
+        #         continue
 
-        else:
-            try:
-                # Move left for 0.5s, then stop and wait 0.5s
-                await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
-                await asyncio.sleep(0.2)
-                await controller.stop()
-                await asyncio.sleep(0.5)
-            except Exception as e:
-                print(f"Error during drive attempt: {e}")
-                continue
+        # else:
+        #     try:
+        #         # Move left for 0.5s, then stop and wait 0.5s
+        #         await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
+        #         await asyncio.sleep(0.2)
+        #         await controller.stop()
+        #         await asyncio.sleep(0.5)
+        #     except Exception as e:
+        #         print(f"Error during drive attempt: {e}")
+        #         continue
 
     stop_event.set()
     quit_task.cancel()
