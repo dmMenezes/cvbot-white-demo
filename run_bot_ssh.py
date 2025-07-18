@@ -124,13 +124,24 @@ async def connect():
             # filename = detected_dir / f"detected_{int(time.time() * 1000)}.jpg"
             # cv2.imwrite(str(filename), annotated_frame)
 
-            # try:
-            #     await controller.stop()  # Ensure stopped before moving
-            #     await asyncio.sleep(0.2)
+            try:
+                await controller.stop()  # Ensure stopped before moving
+                await asyncio.sleep(0.2)
 
-            #     if center_x < LR_center - 50:  # Move left
-            #         await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
-            #         await asyncio.sleep((center_x - LR_center + 50))  # Adjust sleep based on distance
+                if center_x < LR_center - 50:  # Move left
+                    await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
+                    await asyncio.sleep((center_x - LR_center + 50)*(-1)/100)  # Adjust sleep based on distance
+                    await controller.stop()
+
+                elif center_x > LR_center + 50:  # Move right
+                    await controller.drive(speeds=np.array([0.0, -50.0, 0.0]))
+                    await asyncio.sleep((center_x - LR_center - 50)/100)  # Adjust sleep based on distance
+                    await controller.stop()
+
+                else:
+                    await controller.drive(speeds=np.array([0.0, 0.0, -50.0]))  # Stop if within deadzone
+                    await asyncio.sleep(0.1)
+                    await controller.stop()
 
         #         center_threshold = 0.1
 
@@ -165,10 +176,10 @@ async def connect():
         #             await controller.stop()
         #             await asyncio.sleep(0.5)
 
-            # except Exception as e:
-            #     print(f"Error during drive control: {e}")
-        #         await controller.stop()
-        #         continue
+            except Exception as e:
+                print(f"Error during drive control: {e}")
+                await controller.stop()
+                continue
 
         # else:
         #     try:
