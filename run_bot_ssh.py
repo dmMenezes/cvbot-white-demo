@@ -46,8 +46,8 @@ if not cap.isOpened():
 else:
     print("Camera opened successfully")
 
-def detect_ball_center(frame, verbose=False):
-    results = model(frame)
+def detect_ball_center(frame):
+    results = model(frame, verbose=False)
     boxes = results[0].boxes
 
     if boxes is not None and len(boxes) > 0:
@@ -129,16 +129,19 @@ async def connect():
                 await asyncio.sleep(0.2)
 
                 if center_x < LR_center - 50:  # Move left
+                    print(f"center_x - LR_center + 50: {center_x - LR_center + 50} move left for {(center_x - LR_center + 50)*(-1)/100} seconds")
                     await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
                     await asyncio.sleep((center_x - LR_center + 50)*(-1)/100)  # Adjust sleep based on distance
                     await controller.stop()
 
                 elif center_x > LR_center + 50:  # Move right
+                    print(f"center_x - LR_center - 50: {center_x - LR_center - 50} move right for {(center_x - LR_center - 50)/100} seconds")
                     await controller.drive(speeds=np.array([0.0, -50.0, 0.0]))
                     await asyncio.sleep((center_x - LR_center - 50)/100)  # Adjust sleep based on distance
                     await controller.stop()
 
                 else:
+                    print("Ball is centered, move ahead")
                     await controller.drive(speeds=np.array([0.0, 0.0, -50.0]))  # Stop if within deadzone
                     await asyncio.sleep(0.1)
                     await controller.stop()
@@ -181,16 +184,20 @@ async def connect():
                 await controller.stop()
                 continue
 
-        # else:
-        #     try:
+        else:
+            try:
+                print("No ball detected, trying to find...")
+                await controller.drive(speeds=np.array([0.0, -50.0, 0.0]))
+                await asyncio.sleep(0.1)  # Adjust sleep based on distance
+                await controller.stop()
         #         # Move left for 0.5s, then stop and wait 0.5s
         #         await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
         #         await asyncio.sleep(0.2)
         #         await controller.stop()
         #         await asyncio.sleep(0.5)
-        #     except Exception as e:
-        #         print(f"Error during drive attempt: {e}")
-        #         continue
+            except Exception as e:
+                print(f"Error during drive attempt: {e}")
+                continue
 
     stop_event.set()
     quit_task.cancel()
