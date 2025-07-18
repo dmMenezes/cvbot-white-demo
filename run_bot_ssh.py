@@ -89,6 +89,7 @@ async def connect():
         detected, box = detect_ball_center(frame)
 
         if detected:
+            await asyncio.sleep(5)
             x1, y1, x2, y2 = box
             center_x = int((x1 + x2) / 2)
             center_y = int((y1 + y2) / 2)
