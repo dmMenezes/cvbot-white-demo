@@ -115,7 +115,7 @@ async def connect():
             # Draw bounding box and center on copy of frame
             annotated_frame = frame.copy()
             print("frame copied")
-            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
             print("rectangle drawn")
             cv2.circle(annotated_frame, (center_x, center_y), 5, (0, 0, 255), -1)
             print("circle drawn") 
