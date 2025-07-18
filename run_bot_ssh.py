@@ -87,7 +87,6 @@ async def connect():
             break
 
         detected, box = detect_ball_center(frame)
-        annotated_frame = frame.copy()
 
         if detected:
             x1, y1, x2, y2 = box
@@ -103,19 +102,18 @@ async def connect():
                     await controller.stop()
                 elif norm_x <= 0.40:
                     await controller.drive(speeds=np.array([0.0, 100.0, 0.0]))
+                    await asyncio.sleep(0.1)
+                    await controller.stop()
                 elif norm_x >= 0.60:
                     await controller.drive(speeds=np.array([0.0, -100.0, 0.0]))
+                    await asyncio.sleep(0.1)
+                    await controller.stop()
                 elif norm_y > 0.2 and 0.40 < norm_x < 0.60:
                     await controller.drive(speeds=np.array([0.0, 0.0, -100.0]))
+                    await asyncio.sleep(0.1)
+                    await controller.stop()
                 else:
                     await controller.stop()
-
-                # Draw annotations
-                # cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-                # cv2.circle(annotated_frame, (center_x, center_y), 5, (0, 0, 255), -1)
-                # text = f"X: {norm_x:.3f}, Y: {norm_y:.3f}"
-                # cv2.putText(annotated_frame, text, (center_x + 10, center_y - 10),
-                #             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
             except Exception as e:
                 print(f"Error during drive control: {e}")
                 await controller.stop()
@@ -123,24 +121,17 @@ async def connect():
         else:
             try:
                 await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(0.1)
                 await controller.stop()
-
             except Exception as e:
                 print(f"Error during drive attempt: {e}")
                 continue
-
-        # cv2.imshow("Football Detection", annotated_frame)
-        # headless = not os.environ.get("DISPLAY")
-        # if not headless:
-        #     cv2.imshow("Football Detection", annotated_frame)
-
-        # Removed cv2.waitKey-based quit for console input-based quit
 
     stop_event.set()
     quit_task.cancel()
     await controller.stop()
     cap.release()
     cv2.destroyAllWindows()
+
 
 asyncio.run(connect())
