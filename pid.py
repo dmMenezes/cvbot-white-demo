@@ -12,6 +12,7 @@ from ultralytics import YOLO
 import warnings
 import pathlib
 import time
+import threading
 
 # Suppress specific Pydantic warning
 warnings.filterwarnings(
@@ -44,6 +45,44 @@ if not cap.isOpened():
 else:
     print("Camera opened successfully")
 
+# Set camera resolution lower to speed up (optional)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+
+
+class FrameGrabber:
+    def __init__(self, cap):
+        self.cap = cap
+        self.frame = None
+        self.lock = threading.Lock()
+        self.running = True
+        self.thread = threading.Thread(target=self.update, daemon=True)
+        self.thread.start()
+
+    def update(self):
+        while self.running:
+            ret, frame = self.cap.read()
+            if not ret:
+                continue
+            # Lock and update latest frame
+            with self.lock:
+                self.frame = frame
+            # Flush out any other frames in buffer to keep latest only
+            while self.cap.grab():
+                ret2, frame2 = self.cap.retrieve()
+                if ret2:
+                    with self.lock:
+                        self.frame = frame2
+
+    def read(self):
+        with self.lock:
+            return self.frame.copy() if self.frame is not None else None
+
+    def stop(self):
+        self.running = False
+        self.thread.join()
+
+
 def detect_ball_center(frame):
     results = model(frame)
     boxes = results[0].boxes
@@ -57,26 +96,17 @@ def detect_ball_center(frame):
 
     return False, (0, 0, 0, 0)
 
+
 async def listen_for_quit(stop_event):
     while not stop_event.is_set():
         key = await asyncio.to_thread(input, "Press 'q' to quit: ")
         if key.lower() == 'q':
             stop_event.set()
 
+
 async def connect():
     detected_dir = pathlib.Path("detected")
     detected_dir.mkdir(exist_ok=True)
-
-    # Grab a sample frame to get dimensions for video writer
-    ret, sample_frame = cap.read()
-    if not ret:
-        print("Failed to grab sample frame for video writer")
-        exit()
-    frame_height, frame_width = sample_frame.shape[:2]
-
-    fourcc = cv2.VideoWriter_fourcc(*'XVID')
-    video_path = detected_dir / "output.avi"
-    out = cv2.VideoWriter(str(video_path), fourcc, 20.0, (frame_width, frame_height))
 
     stop_event = asyncio.Event()
     quit_task = asyncio.create_task(listen_for_quit(stop_event))
@@ -91,6 +121,8 @@ async def connect():
         print(f"Error initializing API client or controller: {e}")
         exit()
 
+    frame_grabber = FrameGrabber(cap)
+
     # PID controller params for left/right control
     Kp = 100.0
     Ki = 0.0
@@ -99,106 +131,65 @@ async def connect():
     last_error = 0.0
     dt = 0.1  # approx loop interval in seconds
 
-    forward_speed = -100.0  # fixed forward speed (negative for forward)
-    backward_speed = 100.0  # fixed backward speed (positive for backward)
-
-    forward_motion = False
-    backward_motion = False
+    forward_speed = 40.0  # forward speed value, adjust as needed
 
     while not stop_event.is_set():
-        ret, frame = cap.read()
-        if not ret:
-            print("Failed to grab frame")
-            break
+        frame = frame_grabber.read()
+        if frame is None:
+            await asyncio.sleep(0.01)
+            continue
 
         detected, box = detect_ball_center(frame)
 
         if detected:
             x1, y1, x2, y2 = box
             center_x = (x1 + x2) / 2
+            frame_height, frame_width = frame.shape[:2]
             bbox_height = y2 - y1
 
             error = (center_x / frame_width) - 0.5  # error from center line (-0.5 to 0.5)
 
-            # Annotate frame
+            # PID calculations
+            integral += error * dt
+            derivative = (error - last_error) / dt
+            output = Kp * error + Ki * integral + Kd * derivative
+            last_error = error
+
+            # Clamp output to speed limits (e.g., -100 to 100)
+            max_speed = 100.0
+            output = max(min(output, max_speed), -max_speed)
+
+            # Decide forward speed based on bbox height
+            # Move forward if bbox height < 90% frame height
+            if bbox_height < 0.9 * frame_height:
+                forward = forward_speed
+            else:
+                forward = 0.0  # stop forward movement if close enough
+
+            print(f"Error: {error:.3f}, PID output: {output:.1f}, Forward speed: {forward:.1f}")
+
+            # Draw bbox and center for display
             annotated_frame = frame.copy()
             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.circle(annotated_frame, (int(center_x), int((y1 + y2) / 2)), 5, (0, 0, 255), -1)
+            text = f"Error: {error:.3f}, PID: {output:.1f}, Fwd: {forward:.1f}"
+            cv2.putText(annotated_frame, text, (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
-            text = f"Error: {error:.3f}, BBox H: {bbox_height}, Fwd:{forward_motion}, Bwd:{backward_motion}"
-            cv2.putText(annotated_frame, text, (10, 30),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            # Save annotated frame
+            filename = detected_dir / f"detected_{int(time.time() * 1000)}.jpg"
+            cv2.imwrite(str(filename), annotated_frame)
 
-            # Write annotated frame to video
-            out.write(annotated_frame)
-
-            # Forward/backward motion logic
-
-            # Check horizontal centering ranges
-            centered_threshold = 0.05     # ±5% error range for forward motion
-            outer_threshold = 0.07        # ±7% error range to stop forward/backward
-
-            if forward_motion or backward_motion:
-                # If centroid moves outside ±7%, stop forward/backward and go back to PID centering
-                if abs(error) > outer_threshold:
-                    forward_motion = False
-                    backward_motion = False
-                    await controller.stop()
-                    # Reset PID integral and derivative to avoid spikes
-                    integral = 0.0
-                    last_error = error
-                    print("Centroid out of range during forward/backward motion, switching to PID centering")
-                else:
-                    # Continue forward/backward motion based on bbox height
-                    if bbox_height < 0.8 * frame_height:
-                        # Move forward
-                        await controller.drive(speeds=np.array([0.0, 0.0, forward_speed]))
-                        print(f"Moving forward: bbox_height={bbox_height}")
-                    elif bbox_height > 0.9 * frame_height:
-                        # Move backward
-                        await controller.drive(speeds=np.array([0.0, 0.0, backward_speed]))
-                        print(f"Moving backward: bbox_height={bbox_height}")
-                    else:
-                        # Stop motion if bbox height in acceptable range
-                        forward_motion = False
-                        backward_motion = False
-                        await controller.stop()
-                        print("Stopped forward/backward motion: bbox height acceptable")
-            else:
-                # Use PID to center horizontally if not in forward/backward motion
-                if abs(error) > centered_threshold:
-                    # PID calculations
-                    integral += error * dt
-                    derivative = (error - last_error) / dt
-                    output = Kp * error + Ki * integral + Kd * derivative
-                    last_error = error
-
-                    # Clamp output
-                    max_speed = 100.0
-                    output = max(min(output, max_speed), -max_speed)
-
-                    try:
-                        await controller.drive(speeds=np.array([0.0, output, 0.0]))
-                        print(f"PID centering: error={error:.3f}, output={output:.1f}")
-                    except Exception as e:
-                        print(f"Error during drive control: {e}")
-                        await controller.stop()
-                        continue
-                else:
-                    # Centroid within ±5%, start forward motion if bbox height < 80%
-                    if bbox_height < 0.8 * frame_height:
-                        forward_motion = True
-                        backward_motion = False
-                        await controller.drive(speeds=np.array([0.0, 0.0, forward_speed]))
-                        print("Starting forward motion")
-                    else:
-                        await controller.stop()
-                        print("Centered and close enough, stopped")
+            try:
+                # Command robot: speeds = [forward/backward, left/right, rotation]
+                await controller.drive(speeds=np.array([forward, output, 0.0]))
+            except Exception as e:
+                print(f"Error during drive control: {e}")
+                await controller.stop()
+                continue
 
         else:
-            # No detection: write raw frame and search by slowly moving left
-            out.write(frame)
-
+            # No detection: show frame and search by slowly moving left
             try:
                 await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
                 await asyncio.sleep(0.5)
@@ -212,9 +203,10 @@ async def connect():
 
     stop_event.set()
     quit_task.cancel()
+    frame_grabber.stop()
     await controller.stop()
     cap.release()
-    out.release()
     cv2.destroyAllWindows()
+
 
 asyncio.run(connect())
