@@ -121,8 +121,8 @@ async def connect():
             # print("rectangle drawn")
             cv2.circle(annotated_frame, (center_x, center_y), 5, (0, 0, 255), -1)
             # print("circle drawn")
-            cv2.line(annotated_frame, (int(LR_center-150), 0), (int(LR_center-150), frame_height), (255, 0, 0), 1)
-            cv2.line(annotated_frame, (int(LR_center+150), 0), (int(LR_center+150), frame_height), (255, 0, 0), 1)
+            cv2.line(annotated_frame, (int(LR_center-100), 0), (int(LR_center-100), frame_height), (255, 0, 0), 1)
+            cv2.line(annotated_frame, (int(LR_center+100), 0), (int(LR_center+100), frame_height), (255, 0, 0), 1)
             # print("line drawn")
             # text = f"Center X: {norm_x:.3f}"
             # cv2.putText(annotated_frame, text, (x1, y1 - 10),
@@ -138,16 +138,16 @@ async def connect():
                 await controller.stop()  # Ensure stopped before moving
                 await asyncio.sleep(0.2)
 
-                if center_x < LR_center - 150:  # Move left
-                    print(f"center_x - LR_center + 150: {center_x - LR_center + 150} move left for {(center_x - LR_center + 150)*(-1)/1000} seconds")
+                if center_x < LR_center - 100:  # Move left
+                    print(f"center_x - LR_center + 100: {center_x - LR_center + 100} move left for {(center_x - LR_center + 100)*(-1)/1000} seconds")
                     await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
-                    await asyncio.sleep((center_x - LR_center + 150)*(-1)/1000)  # Adjust sleep based on distance
+                    await asyncio.sleep((center_x - LR_center + 100)*(-1)/1000)  # Adjust sleep based on distance
                     await controller.stop()
 
-                elif center_x > LR_center + 150:  # Move right
-                    print(f"center_x - LR_center - 150: {center_x - LR_center - 150} move right for {(center_x - LR_center - 150)/1000} seconds")
+                elif center_x > LR_center + 100:  # Move right
+                    print(f"center_x - LR_center - 100: {center_x - LR_center - 100} move right for {(center_x - LR_center - 100)/1000} seconds")
                     await controller.drive(speeds=np.array([0.0, -50.0, 0.0]))
-                    await asyncio.sleep((center_x - LR_center - 150)/1000)  # Adjust sleep based on distance
+                    await asyncio.sleep((center_x - LR_center - 100)/1000)  # Adjust sleep based on distance
                     await controller.stop()
 
                 else:
