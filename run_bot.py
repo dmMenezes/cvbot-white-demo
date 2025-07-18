@@ -161,7 +161,7 @@ async def connect():
 
         headless = not os.environ.get("DISPLAY")
 
-        # Later in code, only show frame if GUI is available
+        # only show frame if GUI is available
         if not headless:
             cv2.imshow("Football Detection", annotated_frame)
 

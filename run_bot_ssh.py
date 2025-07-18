@@ -14,8 +14,6 @@ from ultralytics import YOLO
 
 import warnings
 import signal
-import threading
-from flask import Flask, Response
 
 # Suppress specific Pydantic warning
 warnings.filterwarnings(
@@ -48,33 +46,6 @@ if not cap.isOpened():
 else:
     print("Camera opened successfully")
 
-# Shared annotated frame and lock for streaming
-current_annotated_frame = None
-frame_lock = threading.Lock()
-
-# Flask app for video streaming
-app = Flask(__name__)
-
-def generate_stream():
-    global current_annotated_frame
-    while True:
-        with frame_lock:
-            if current_annotated_frame is None:
-                continue
-            ret, jpeg = cv2.imencode('.jpg', current_annotated_frame)
-            if not ret:
-                continue
-            frame_bytes = jpeg.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
-
-@app.route('/video_feed')
-def video_feed():
-    return Response(generate_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
-def start_flask():
-    app.run(host='0.0.0.0', port=5000, threaded=True)
-
 def detect_ball_center(frame):
     results = model(frame, verbose=False)
     boxes = results[0].boxes
@@ -88,23 +59,28 @@ def detect_ball_center(frame):
 
     return False, (0, 0, 0, 0)
 
+async def listen_for_quit(stop_event):
+    while not stop_event.is_set():
+        key = await asyncio.to_thread(input, "Press 'q' to quit: ")
+        if key.lower() == 'q':
+            stop_event.set()
+
 async def connect():
+    stop_event = asyncio.Event()
+    quit_task = asyncio.create_task(listen_for_quit(stop_event))
+
     try:
         print("Initializing API client and controller")
         api_client = TxtApiClient(HOST, PORT, KEY)
         controller = EasyDriveController(api_client, DriveRobotConfiguration())
         await api_client.initialize()
         await controller.stop()
-    
+
     except Exception as e:
         print(f"Error initializing API client or controller: {e}")
         exit()
 
-    while True:
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            await controller.stop()
-            break
-
+    while not stop_event.is_set():
         ret, frame = cap.read()
         if not ret:
             print("Failed to grab the frame")
@@ -151,53 +127,17 @@ async def connect():
                 print(f"Error during drive attempt: {e}")
                 continue
 
-        # Store frame for both GUI and HTTP
-        with frame_lock:
-            current_annotated_frame = annotated_frame.copy()
+        # cv2.imshow("Football Detection", annotated_frame)
+        # headless = not os.environ.get("DISPLAY")
+        # if not headless:
+        #     cv2.imshow("Football Detection", annotated_frame)
 
-        # GUI display (preserved)
-        headless = not os.environ.get("DISPLAY")
-        if not headless:
-            cv2.imshow("Football Detection", annotated_frame)
+        # Removed cv2.waitKey-based quit for console input-based quit
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
-
+    stop_event.set()
+    quit_task.cancel()
     await controller.stop()
     cap.release()
     cv2.destroyAllWindows()
 
-    # first param turns front and rear in reverse
-    # second param rotate positive -> left
-    # third param forward (negative)
-    # await asyncio.sleep(1.0)
-
-
-async def main():
-    stop_event = asyncio.Event()
-
-    def shutdown():
-        print("\n[INFO] Shutdown signal received. Stopping...")
-        stop_event.set()
-
-    loop = asyncio.get_running_loop()
-    loop.add_signal_handler(signal.SIGINT, shutdown)
-    loop.add_signal_handler(signal.SIGTERM, shutdown)
-
-    flask_thread = threading.Thread(target=start_flask, daemon=True)
-    flask_thread.start()
-    print("[INFO] Flask streaming server started at http://<rpi-ip>:5000/video_feed")
-
-    connect_task = asyncio.create_task(connect())
-    await stop_event.wait()
-    connect_task.cancel()
-    try:
-        await connect_task
-    except asyncio.CancelledError:
-        print("[INFO] connect() task cancelled cleanly.")
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except KeyboardInterrupt:
-        print("[INFO] Program interrupted manually.")
+asyncio.run(connect())
