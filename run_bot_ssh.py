@@ -47,7 +47,7 @@ else:
     print("Camera opened successfully")
 
 def detect_ball_center(frame):
-    results = model(frame, verbose=False)
+    results = model(frame)
     boxes = results[0].boxes
 
     if boxes is not None and len(boxes) > 0:
@@ -100,18 +100,18 @@ async def connect():
             try:
                 if bb_height > 0.9 * frame_height:
                     await controller.stop()
-                elif norm_x <= 0.40:
-                    await controller.drive(speeds=np.array([0.0, 100.0, 0.0]))
-                    await asyncio.sleep(0.1)
-                    await controller.stop()
-                elif norm_x >= 0.60:
-                    await controller.drive(speeds=np.array([0.0, -100.0, 0.0]))
-                    await asyncio.sleep(0.1)
-                    await controller.stop()
-                elif norm_y > 0.2 and 0.40 < norm_x < 0.60:
-                    await controller.drive(speeds=np.array([0.0, 0.0, -100.0]))
-                    await asyncio.sleep(0.1)
-                    await controller.stop()
+                elif norm_x <= 0.30:
+                    await controller.drive(speeds=np.array([0.0, 30.0, 0.0]))
+                    # await asyncio.sleep(0.1)
+                    # await controller.stop()
+                elif norm_x >= 0.70:
+                    await controller.drive(speeds=np.array([0.0, -30.0, 0.0]))
+                    # await asyncio.sleep(0.1)
+                    # await controller.stop()
+                elif norm_y > 0.2 and 0.30 < norm_x < 0.70:
+                    await controller.drive(speeds=np.array([0.0, 0.0, -30.0]))
+                    # await asyncio.sleep(0.1)
+                    # await controller.stop()
                 else:
                     await controller.stop()
             except Exception as e:
@@ -120,9 +120,9 @@ async def connect():
                 continue
         else:
             try:
-                await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
-                await asyncio.sleep(0.1)
-                await controller.stop()
+                await controller.drive(speeds=np.array([0.0, 30.0, 0.0]))
+                # await asyncio.sleep(0.1)
+                # await controller.stop()
             except Exception as e:
                 print(f"Error during drive attempt: {e}")
                 continue
