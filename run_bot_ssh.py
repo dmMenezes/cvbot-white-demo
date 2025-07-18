@@ -122,7 +122,10 @@ async def connect():
                 continue
         else:
             try:
-                await controller.drive(speeds=np.array([0.0, 70.0, 0.0]))
+                await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
+                await asyncio.sleep(0.2)
+                await controller.stop()
+
             except Exception as e:
                 print(f"Error during drive attempt: {e}")
                 continue
