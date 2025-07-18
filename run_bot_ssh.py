@@ -137,28 +137,27 @@ async def connect():
             try:
                 await controller.stop()  # Ensure stopped before moving
                 await asyncio.sleep(0.2)
-
+                                    
                 if LR_center - 100 < center_x < LR_center + 100:
-                    print("Ball is centered")
+                    print("Ball is centered, move ahead")
+                    await controller.drive(speeds=np.array([0.0, 0.0, -50.0]))  # Stop if within deadzone
+                    await asyncio.sleep(0.2)
+                    await controller.stop()
                     continue
 
                 elif center_x < LR_center - 100:  # Move left
-                    print(f"center_x - LR_center + 100: {center_x - LR_center + 100} move left for {(center_x - LR_center + 100)*(-1)/1000} seconds")
+                    print(f"center_x - LR_center + 100: {center_x - LR_center + 100} L")
                     await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
-                    await asyncio.sleep((center_x - LR_center + 100)*(-1)/1000)  # Adjust sleep based on distance
+                    await asyncio.sleep(0.2)  # Adjust sleep based on distance
                     await controller.stop()
+                    continue
 
                 elif center_x > LR_center + 100:  # Move right
-                    print(f"center_x - LR_center - 100: {center_x - LR_center - 100} move right for {(center_x - LR_center - 100)/1000} seconds")
+                    print(f"center_x - LR_center - 100: {center_x - LR_center - 100} R")
                     await controller.drive(speeds=np.array([0.0, -50.0, 0.0]))
-                    await asyncio.sleep((center_x - LR_center - 100)/1000)  # Adjust sleep based on distance
+                    await asyncio.sleep(0.2)  # Adjust sleep based on distance
                     await controller.stop()
-
-                else:
-                    print("Ball is centered, move ahead")
-                    await controller.drive(speeds=np.array([0.0, 0.0, -50.0]))  # Stop if within deadzone
-                    await asyncio.sleep(0.1)
-                    await controller.stop()
+                    continue
 
         #         center_threshold = 0.1
 
@@ -202,8 +201,9 @@ async def connect():
             try:
                 print("No ball detected, trying to find...")
                 await controller.drive(speeds=np.array([0.0, -50.0, 0.0]))
-                await asyncio.sleep(0.1)  # Adjust sleep based on distance
+                await asyncio.sleep(0.2)  # Adjust sleep based on distance
                 await controller.stop()
+                await asyncio.sleep(0.2) 
         #         # Move left for 0.5s, then stop and wait 0.5s
         #         await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
         #         await asyncio.sleep(0.2)
