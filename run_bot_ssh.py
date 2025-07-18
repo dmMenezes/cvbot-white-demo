@@ -101,28 +101,28 @@ async def connect():
             try:
                 if bb_height > 0.9 * frame_height:
                     await controller.stop()
-                elif norm_x <= 0.45:
+                elif norm_x <= 0.40:
                     await controller.drive(speeds=np.array([0.0, 100.0, 0.0]))
-                elif norm_x >= 0.55:
+                elif norm_x >= 0.60:
                     await controller.drive(speeds=np.array([0.0, -100.0, 0.0]))
-                elif norm_y > 0.3 and 0.45 < norm_x < 0.55:
+                elif norm_y > 0.2 and 0.40 < norm_x < 0.60:
                     await controller.drive(speeds=np.array([0.0, 0.0, -100.0]))
                 else:
                     await controller.stop()
 
                 # Draw annotations
-                cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-                cv2.circle(annotated_frame, (center_x, center_y), 5, (0, 0, 255), -1)
-                text = f"X: {norm_x:.3f}, Y: {norm_y:.3f}"
-                cv2.putText(annotated_frame, text, (center_x + 10, center_y - 10),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                # cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
+                # cv2.circle(annotated_frame, (center_x, center_y), 5, (0, 0, 255), -1)
+                # text = f"X: {norm_x:.3f}, Y: {norm_y:.3f}"
+                # cv2.putText(annotated_frame, text, (center_x + 10, center_y - 10),
+                #             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
             except Exception as e:
                 print(f"Error during drive control: {e}")
                 await controller.stop()
                 continue
         else:
             try:
-                await controller.drive(speeds=np.array([0.0, 100.0, 0.0]))
+                await controller.drive(speeds=np.array([0.0, 70.0, 0.0]))
             except Exception as e:
                 print(f"Error during drive attempt: {e}")
                 continue
