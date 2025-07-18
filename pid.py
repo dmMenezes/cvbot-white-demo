@@ -160,11 +160,15 @@ async def connect():
             output = max(min(output, max_speed), -max_speed)
 
             # Decide forward speed based on bbox height
-            # Move forward if bbox height < 90% frame height
-            if bbox_height < 0.9 * frame_height:
+            # Move forward if bbox height < 75% frame height
+            if bbox_height < 0.75 * frame_height:
                 forward = forward_speed
-            else:
-                forward = 0.0  # stop forward movement if close enough
+            elif bbox_height > 0.9 * frame_height:
+                forward = - forward_speed
+            # elif 0.77 * frame_height > bbox_height > 0.88 * frame_height:  # Slow down if close
+            #     forward = 0.0
+            else:  # stop forward movement if close enough
+                forward = 0.0
 
             print(f"Error: {error:.3f}, PID output: {output:.1f}, Forward speed: {forward:.1f}")
 
@@ -184,8 +188,12 @@ async def connect():
                 if forward_speed == 0.0:
                     # Command robot: speeds = [forward/backward, left/right, rotation]
                     await controller.drive(speeds=np.array([forward, output, 0.0]))
-                else:
+                elif forward > 0.0:
                     await controller.drive(speeds=np.array([0.0, 0.0, -100.0]))
+                elif forward < 0.0:
+                    await controller.drive(speeds=np.array([0.0, 0.0, 100.0]))
+                elif 0.77 * frame_height > bbox_height > 0.88 * frame_height:  # Slow down if close
+                    await controller.drive(speeds=np.array([0.0, 0.0, 0.0]))
             except Exception as e:
                 print(f"Error during drive control: {e}")
                 await controller.stop()
