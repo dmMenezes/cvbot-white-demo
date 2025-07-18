@@ -113,16 +113,16 @@ async def connect():
             # print(f"Normalized X: {norm_x:.3f}")
 
             # Draw bounding box and center on copy of frame
-            # annotated_frame = frame.copy()
-            # cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            # cv2.circle(annotated_frame, (center_x, center_y), 5, (0, 0, 255), -1)
+            annotated_frame = frame.copy()
+            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.circle(annotated_frame, (center_x, center_y), 5, (0, 0, 255), -1)
             # text = f"Center X: {norm_x:.3f}"
             # cv2.putText(annotated_frame, text, (x1, y1 - 10),
             #             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
             # Save annotated frame with timestamp
-            # filename = detected_dir / f"detected_{int(time.time() * 1000)}.jpg"
-            # cv2.imwrite(str(filename), annotated_frame)
+            filename = detected_dir / f"detected_{int(time.time() * 1000)}.jpg"
+            cv2.imwrite(str(filename), annotated_frame)
 
             try:
                 await controller.stop()  # Ensure stopped before moving
