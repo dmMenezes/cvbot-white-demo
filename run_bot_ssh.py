@@ -121,8 +121,8 @@ async def connect():
             # print("rectangle drawn")
             cv2.circle(annotated_frame, (center_x, center_y), 5, (0, 0, 255), -1)
             # print("circle drawn")
-            cv2.line(annotated_frame, (LR_center-150, 0), (LR_center-150, frame_height), (255, 0, 0), 1)
-            cv2.line(annotated_frame, (LR_center+150, 0), (LR_center+150, frame_height), (255, 0, 0), 1)
+            cv2.line(annotated_frame, (int(LR_center-150), 0), (int(LR_center-150), frame_height), (255, 0, 0), 1)
+            cv2.line(annotated_frame, (int(LR_center+150), 0), (int(LR_center+150), frame_height), (255, 0, 0), 1)
             # print("line drawn")
             # text = f"Center X: {norm_x:.3f}"
             # cv2.putText(annotated_frame, text, (x1, y1 - 10),
