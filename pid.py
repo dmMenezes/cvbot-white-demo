@@ -80,13 +80,16 @@ async def connect():
         print(f"Error initializing API client or controller: {e}")
         exit()
 
-    # PID controller params
+    # PID controller params for left/right control
     Kp = 100.0
     Ki = 0.0
     Kd = 20.0
     integral = 0.0
     last_error = 0.0
-    dt = 0.1  # loop time step approx
+    dt = 0.1  # approx loop interval in seconds
+
+    forward_motion = False
+    backward_motion = False
 
     while not stop_event.is_set():
         ret, frame = cap.read()
@@ -99,26 +102,16 @@ async def connect():
         if detected:
             x1, y1, x2, y2 = box
             center_x = (x1 + x2) / 2
-            frame_width = frame.shape[1]
-            error = (center_x / frame_width) - 0.5  # error from center line (range approx -0.5 to 0.5)
+            frame_height, frame_width = frame.shape[:2]
+            bbox_height = y2 - y1
 
-            # PID calculations
-            integral += error * dt
-            derivative = (error - last_error) / dt
-            output = Kp * error + Ki * integral + Kd * derivative
-            last_error = error
-
-            # Clamp output to speed limits (e.g., -100 to 100)
-            max_speed = 100.0
-            output = max(min(output, max_speed), -max_speed)
-
-            print(f"Error: {error:.3f}, PID output: {output:.1f}")
+            error = (center_x / frame_width) - 0.5  # error from center line (-0.5 to 0.5)
 
             # Draw bbox and center for display
             annotated_frame = frame.copy()
             cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
             cv2.circle(annotated_frame, (int(center_x), int((y1 + y2) / 2)), 5, (0, 0, 255), -1)
-            text = f"Error: {error:.3f}, PID: {output:.1f}"
+            text = f"Error: {error:.3f}, BBox height: {bbox_height}, Forward: {forward_motion}, Backward: {backward_motion}"
             cv2.putText(annotated_frame, text, (x1, y1 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
@@ -126,20 +119,81 @@ async def connect():
             filename = detected_dir / f"detected_{int(time.time() * 1000)}.jpg"
             cv2.imwrite(str(filename), annotated_frame)
 
-            try:
-                await controller.drive(speeds=np.array([0.0, output, 0.0]))
-            except Exception as e:
-                print(f"Error during drive control: {e}")
-                await controller.stop()
-                continue
+            if forward_motion or backward_motion:
+                # If moving forward/backward, check if centroid drifts beyond ±7%
+                if abs(error) > 0.07:
+                    # Stop forward/backward motion and switch to centering
+                    forward_motion = False
+                    backward_motion = False
+                    await controller.stop()
+                    print("Centroid drifted out of range, stopping forward/backward motion.")
+                else:
+                    # Continue forward or backward motion based on bbox height
+                    if forward_motion and bbox_height >= 0.9 * frame_height:
+                        # Too close, start moving backward
+                        forward_motion = False
+                        backward_motion = True
+                        print("Too close, switching to backward motion.")
+                    elif backward_motion and bbox_height <= 0.8 * frame_height:
+                        # Far enough, stop backward motion
+                        backward_motion = False
+                        await controller.stop()
+                        print("Back to acceptable distance, stopping backward motion.")
 
-            # Show frame with annotation (comment out if needed)
+                    try:
+                        if forward_motion:
+                            # Move forward
+                            await controller.drive(speeds=np.array([0.0, 0.0, -100.0]))
+                            print("Moving forward.")
+                        elif backward_motion:
+                            # Move backward
+                            await controller.drive(speeds=np.array([0.0, 0.0, 100.0]))
+                            print("Moving backward.")
+                        else:
+                            # Stop motion
+                            await controller.stop()
+                    except Exception as e:
+                        print(f"Error during forward/backward drive: {e}")
+                        await controller.stop()
+            else:
+                # Not moving forward/backward, do PID centering until within ±5%
+                if abs(error) <= 0.05:
+                    # Within acceptable range, start forward motion if bbox height < 80%
+                    if bbox_height < 0.8 * frame_height:
+                        forward_motion = True
+                        print("Starting forward motion.")
+                        try:
+                            await controller.drive(speeds=np.array([0.0, 0.0, -100.0]))
+                        except Exception as e:
+                            print(f"Error starting forward drive: {e}")
+                            await controller.stop()
+                    else:
+                        # Close enough, no forward motion needed
+                        await controller.stop()
+                else:
+                    # PID left/right centering
+                    integral += error * dt
+                    derivative = (error - last_error) / dt
+                    output = Kp * error + Ki * integral + Kd * derivative
+                    last_error = error
+
+                    # Clamp output
+                    max_speed = 100.0
+                    output = max(min(output, max_speed), -max_speed)
+
+                    try:
+                        await controller.drive(speeds=np.array([0.0, output, 0.0]))
+                        print(f"Centering with PID output: {output:.1f}")
+                    except Exception as e:
+                        print(f"Error during PID centering drive: {e}")
+                        await controller.stop()
+
+            # Show live video
             cv2.imshow('Detection', annotated_frame)
 
         else:
-            # No detection, show normal frame and try searching by moving left slowly
+            # No detection: show frame and search by slowly moving left
             cv2.imshow('Detection', frame)
-
             try:
                 await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
                 await asyncio.sleep(0.5)
@@ -149,7 +203,7 @@ async def connect():
                 print(f"Error during search drive: {e}")
                 continue
 
-        # Quit if 'q' pressed on window
+        # Allow quit on window keypress 'q'
         if cv2.waitKey(1) & 0xFF == ord('q'):
             stop_event.set()
             break
