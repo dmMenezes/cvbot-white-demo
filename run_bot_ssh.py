@@ -138,7 +138,11 @@ async def connect():
                 await controller.stop()  # Ensure stopped before moving
                 await asyncio.sleep(0.2)
 
-                if center_x < LR_center - 100:  # Move left
+                if LR_center - 100 < center_x < LR_center + 100:
+                    print("Ball is centered")
+                    continue
+
+                elif center_x < LR_center - 100:  # Move left
                     print(f"center_x - LR_center + 100: {center_x - LR_center + 100} move left for {(center_x - LR_center + 100)*(-1)/1000} seconds")
                     await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
                     await asyncio.sleep((center_x - LR_center + 100)*(-1)/1000)  # Adjust sleep based on distance
