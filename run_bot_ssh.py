@@ -66,11 +66,12 @@ async def listen_for_quit(stop_event):
             stop_event.set()
 
 import time
-
-# Make sure to create this directory at the start of connect()
 import pathlib
 
 async def connect():
+    detected_dir = pathlib.Path("detected")
+    detected_dir.mkdir(exist_ok=True)
+
     stop_event = asyncio.Event()
     quit_task = asyncio.create_task(listen_for_quit(stop_event))
 
@@ -94,36 +95,44 @@ async def connect():
         detected, box = detect_ball_center(frame)
 
         if detected:
-            x1, y1, x2, y2 = box
+            x1, y1, x2, y2 = map(int, box)
             center_x = int((x1 + x2) / 2)
+            center_y = int((y1 + y2) / 2)
             frame_height, frame_width = frame.shape[:2]
             norm_x = (center_x / frame_width) - 0.5  # normalized x centered at 0
+            print(f"Normalized X: {norm_x:.3f}")
+
+            # Draw bounding box and center on copy of frame
+            annotated_frame = frame.copy()
+            cv2.rectangle(annotated_frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.circle(annotated_frame, (center_x, center_y), 5, (0, 0, 255), -1)
+            text = f"Center X: {norm_x:.3f}"
+            cv2.putText(annotated_frame, text, (x1, y1 - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+
+            # Save annotated frame with timestamp
+            filename = detected_dir / f"detected_{int(time.time() * 1000)}.jpg"
+            cv2.imwrite(str(filename), annotated_frame)
 
             try:
                 await controller.stop()  # Ensure stopped before moving
+                await asyncio.sleep(1)
                 
                 if norm_x < -0.2:
                     # Move left for 1 second
-                    await controller.drive(speeds=np.array([0.0, 30.0, 0.0]))
-                    await asyncio.sleep(1)
+                    await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
+                    await asyncio.sleep(0.2)
                     await controller.stop()
+                    await asyncio.sleep(0.5)
                 elif norm_x > 0.2:
                     # Move right for 1 second
-                    await controller.drive(speeds=np.array([0.0, -30.0, 0.0]))
-                    await asyncio.sleep(1)
+                    await controller.drive(speeds=np.array([0.0, -50.0, 0.0]))
+                    await asyncio.sleep(0.2)
                     await controller.stop()
+                    await asyncio.sleep(0.5)
                 else:
                     # No movement if within -0.2 to 0.2 range
                     await controller.stop()
-
-                # Commented out other motions
-                # bb_height = y2 - y1
-                # if bb_height > 0.9 * frame_height:
-                #     await controller.stop()
-                # elif norm_y > 0.2 and -0.2 < norm_x < 0.2:
-                #     await controller.drive(speeds=np.array([0.0, 0.0, -30.0]))
-                # else:
-                #     await controller.stop()
 
             except Exception as e:
                 print(f"Error during drive control: {e}")
@@ -133,8 +142,8 @@ async def connect():
         else:
             try:
                 # Move left for 0.5s, then stop and wait 0.5s
-                await controller.drive(speeds=np.array([0.0, 30.0, 0.0]))
-                await asyncio.sleep(0.5)
+                await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
+                await asyncio.sleep(0.2)
                 await controller.stop()
                 await asyncio.sleep(0.5)
             except Exception as e:
