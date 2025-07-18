@@ -116,20 +116,23 @@ async def connect():
 
             # Draw bounding box and center on copy of frame
             annotated_frame = frame.copy()
-            print("frame copied")
+            # print("frame copied")
             cv2.rectangle(annotated_frame, (int(x1), int(y1)), (int(x2), int(y2)), (0, 255, 0), 2)
-            print("rectangle drawn")
+            # print("rectangle drawn")
             cv2.circle(annotated_frame, (center_x, center_y), 5, (0, 0, 255), -1)
-            print("circle drawn") 
+            # print("circle drawn")
+            cv2.line(annotated_frame, (LR_center-150, 0), (LR_center-150, frame_height), (255, 0, 0), 1)
+            cv2.line(annotated_frame, (LR_center+150, 0), (LR_center+150, frame_height), (255, 0, 0), 1)
+            # print("line drawn")
             # text = f"Center X: {norm_x:.3f}"
             # cv2.putText(annotated_frame, text, (x1, y1 - 10),
             #             cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
 
             # Save annotated frame with timestamp
             filename = detected_dir / f"detected_{int(time.time() * 1000)}.jpg"
-            print(f"Saving annotated frame to {filename}")
+            # print(f"Saving annotated frame to {filename}")
             cv2.imwrite(str(filename), annotated_frame)
-            print("annotated frame saved")
+            # print("annotated frame saved")
 
             try:
                 await controller.stop()  # Ensure stopped before moving
