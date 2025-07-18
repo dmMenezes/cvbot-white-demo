@@ -129,15 +129,15 @@ async def connect():
                 await asyncio.sleep(0.2)
 
                 if center_x < LR_center - 50:  # Move left
-                    print(f"center_x - LR_center + 50: {center_x - LR_center + 50} move left for {(center_x - LR_center + 50)*(-1)/100} seconds")
+                    print(f"center_x - LR_center + 50: {center_x - LR_center + 50} move left for {(center_x - LR_center + 50)*(-1)/1000} seconds")
                     await controller.drive(speeds=np.array([0.0, 50.0, 0.0]))
-                    await asyncio.sleep((center_x - LR_center + 50)*(-1)/100)  # Adjust sleep based on distance
+                    await asyncio.sleep((center_x - LR_center + 50)*(-1)/1000)  # Adjust sleep based on distance
                     await controller.stop()
 
                 elif center_x > LR_center + 50:  # Move right
-                    print(f"center_x - LR_center - 50: {center_x - LR_center - 50} move right for {(center_x - LR_center - 50)/100} seconds")
+                    print(f"center_x - LR_center - 50: {center_x - LR_center - 50} move right for {(center_x - LR_center - 50)/1000} seconds")
                     await controller.drive(speeds=np.array([0.0, -50.0, 0.0]))
-                    await asyncio.sleep((center_x - LR_center - 50)/100)  # Adjust sleep based on distance
+                    await asyncio.sleep((center_x - LR_center - 50)/1000)  # Adjust sleep based on distance
                     await controller.stop()
 
                 else:
